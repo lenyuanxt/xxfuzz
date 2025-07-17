@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Packet Analyzer - IoT Web Fuzz Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .packet-section {
+            margin-bottom: 2rem;
+        }
+        .packet-card {
+            border-left: 4px solid #0d6efd;
+        }
+        .param-badge {
+            cursor: pointer;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+        .param-badge.selected {
+            background-color: #0d6efd;
+        }
+        .json-container {
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    {% extends "base.html" %}
+
+    {% block content %}
+    <div class="container mt-4">
+        <h1 class="mb-4">HTTP Packet Analyzer</h1>
+
+        <div class="card packet-section">
+            <div class="card-header bg-light">
+                <h5>Enter Raw HTTP Packet</h5>
+            </div>
+            <div class="card-body">
+                <form id="packet-form">
+                    <div class="mb-3">
+                        <label class="form-label">Paste from Burp/Yakit:</label>
+                        <textarea
+                            class="form-control font-monospace"
+                            id="raw-packet"
+                            rows="10"
+                            placeholder="GET /index.php?id=1 HTTP/1.1&#10;Host: example.com&#10;User-Agent: Mozilla/5.0&#10;Cookie: session=abc123;&#10;&#10;username=admin&amp;password=123456"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-cogs me-2"></i>Parse Packet
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div id="result-section">
+            <div class="card packet-section packet-card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5><i class="fas fa-edit me-2"></i>可编辑HTTP请求表单</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-primary"><i class="fas fa-terminal me-1"></i>Request Line</h6>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Method</label>
+                                <input type="text" class="form-control" id="edit-method" name="method" placeholder="如：GET/POST" value="">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Path</label>
+                                <input type="text" class="form-control" id="edit-path" name="path" placeholder="如：/index.php" value="">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">HTTP Version</label>
+                                <input type="text" class="form-control" id="edit-http-version" name="http_version" placeholder="如：HTTP/1.1" value="">
+                            </div>
+                            <h6 class="text-success mt-4"><i class="fas fa-question-circle me-1"></i>Query Parameters</h6>
+                            <div id="edit-query-params" class="mb-3"></div>
+                            <h6 class="text-warning mt-4"><i class="fas fa-heading me-1"></i>Headers</h6>
+                            <div id="edit-headers" class="mb-3"></div>
+                            <h6 class="text-danger mt-4"><i class="fas fa-cookie-bite me-1"></i>Cookies</h6>
+                            <div id="edit-cookies" class="mb-3"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-info"><i class="fas fa-align-left me-1"></i>Request Body</h6>
+                            <textarea class="form-control mb-3" id="edit-body" name="body" rows="5" placeholder="请求体内容"></textarea>
+                            <h6 class="text-secondary mt-4"><i class="fas fa-list me-1"></i>Body Parameters</h6>
+                            <div id="edit-body-params" class="mb-3"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-light text-center">
+                    <button class="btn btn-warning btn-lg px-5" id="save-template">
+                        <i class="fas fa-save me-2"></i>保存为模板
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endblock %}
+
+    {% block scripts %}
+    <script>
+        $(document).ready(function() {
+            // 页面加载时渲染空表单
+            renderEditableKeyValue({}, '#edit-query-params', 'query_params');
+            renderEditableKeyValue({}, '#edit-headers', 'headers');
+            renderEditableKeyValue({}, '#edit-cookies', 'cookies');
+            renderEditableKeyValue({}, '#edit-body-params', 'body_params');
+
+            // 提交数据包进行解析
+            $('#packet-form').on('submit', function(e) {
+                e.preventDefault();
+                const rawPacket = $('#raw-packet').val();
+
+                $.ajax({
+                    url: '/packet/parse',
+                    method: 'POST',
+                    data: { raw_packet: rawPacket },
+                    success: function(response) {
+                        if (response.success) {
+                            displayParsedData(response.parsed);
+                            displayFuzzableFields(response.fuzzable);
+                        } else {
+                            alert('Error: ' + (response.error || 'Unknown error'));
+                        }
+                    },
+                    error: function() {
+                        alert('Server error occurred');
+                    }
+                });
+            });
+
+            // 显示解析结果
+            function displayParsedData(data) {
+                // 填充可编辑表单
+                $('#edit-method').val(data.method);
+                $('#edit-path').val(data.path);
+                $('#edit-http-version').val(data.http_version);
+                renderEditableKeyValue(data.query_params, '#edit-query-params', 'query_params');
+                renderEditableKeyValue(data.headers, '#edit-headers', 'headers');
+                renderEditableKeyValue(data.cookies, '#edit-cookies', 'cookies');
+                $('#edit-body').val(data.body || '');
+                renderEditableKeyValue(data.body_params, '#edit-body-params', 'body_params');
+            }
+
+            // 显示键值对数据
+            function displayKeyValue(data, container) {
+                const $container = $(container);
+                $container.empty();
+
+                if (Object.keys(data).length === 0) {
+                    $container.html('<p>None</p>');
+                    return;
+                }
+
+                for (const [key, value] of Object.entries(data)) {
+                    $container.append(`
+                        <div class="d-flex mb-1">
+                            <div class="fw-bold me-2" style="min-width: 150px;">${key}:</div>
+                            <div>${Array.isArray(value) ? value.join(', ') : value}</div>
+                        </div>
+                    `);
+                }
+            }
+
+            // 渲染可编辑键值对
+            function renderEditableKeyValue(data, container, prefix) {
+                const $container = $(container);
+                $container.empty();
+                if (Object.keys(data).length === 0) {
+                    $container.html('<p>None</p>');
+                    return;
+                }
+                for (const [key, value] of Object.entries(data)) {
+                    $container.append(`
+                        <div class="input-group mb-1">
+                            <span class="input-group-text">${key}</span>
+                            <input type="text" class="form-control" name="${prefix}-${key}" value="${Array.isArray(value) ? value.join(',') : value}">
+                        </div>
+                    `);
+                }
+            }
+
+            // 显示可模糊测试的字段
+            function displayFuzzableFields(fields) {
+                const $container = $('#fuzz-fields');
+                $container.empty();
+
+                for (const [category, items] of Object.entries(fields)) {
+                    const $category = $(`
+                        <div class="mb-3">
+                            <h6>${category.replace('_', ' ').toUpperCase()}</h6>
+                            <div class="d-flex flex-wrap" id="${category}-fields"></div>
+                        </div>
+                    `);
+
+                    $container.append($category);
+
+                    const $fieldContainer = $category.find(`#${category}-fields`);
+
+                    for (const [field, meta] of Object.entries(items)) {
+                        const badgeClass = meta.type === 'enum' ? 'bg-warning' : 'bg-secondary';
+
+                        $fieldContainer.append(`
+                            <span class="badge ${badgeClass} param-badge"
+                                  data-category="${category}"
+                                  data-field="${field}"
+                                  title="Type: ${meta.type}${meta.values ? ', Values: ' + meta.values.join(',') : ''}">
+                                ${field} <i class="fas fa-plus"></i>
+                            </span>
+                        `);
+                    }
+                }
+
+                // 选择字段进行模糊测试
+                $('.param-badge').on('click', function() {
+                    $(this).toggleClass('selected bg-primary');
+                    const icon = $(this).find('i');
+                    icon.toggleClass('fa-plus fa-check');
+                });
+            }
+
+            // 开始模糊测试
+            $('#start-fuzz').on('click', function() {
+                const selectedFields = [];
+                $('.param-badge.selected').each(function() {
+                    selectedFields.push({
+                        category: $(this).data('category'),
+                        field: $(this).data('field')
+                    });
+                });
+
+                if (selectedFields.length === 0) {
+                    alert('Please select at least one field to fuzz');
+                    return;
+                }
+
+                // 这里将调用模糊测试API
+                alert(`Starting fuzzing for ${selectedFields.length} fields...`);
+                console.log('Selected fields:', selectedFields);
+            });
+
+            // 保存为模板
+            $('#save-template').on('click', function() {
+                // 收集表单数据
+                const template = {
+                    method: $('#edit-method').val(),
+                    path: $('#edit-path').val(),
+                    http_version: $('#edit-http-version').val(),
+                    query_params: collectEditableKeyValue('#edit-query-params', 'query_params'),
+                    headers: collectEditableKeyValue('#edit-headers', 'headers'),
+                    cookies: collectEditableKeyValue('#edit-cookies', 'cookies'),
+                    body: $('#edit-body').val(),
+                    body_params: collectEditableKeyValue('#edit-body-params', 'body_params')
+                };
+                $.ajax({
+                    url: '/packet/save_template',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({template: template}),
+                    success: function(response) {
+                        if (response.success) {
+                            alert('模板保存成功！');
+                        } else {
+                            alert('保存失败: ' + (response.error || '未知错误'));
+                        }
+                    },
+                    error: function() {
+                        alert('服务器错误，保存失败');
+                    }
+                });
+            });
+            // 收集可编辑键值对
+            function collectEditableKeyValue(container, prefix) {
+                const result = {};
+                $(container + ' input').each(function() {
+                    const name = $(this).attr('name');
+                    if (name && name.startsWith(prefix + '-')) {
+                        const key = name.replace(prefix + '-', '');
+                        result[key] = $(this).val();
+                    }
+                });
+                return result;
+            }
+        });
+    </script>
+    {% endblock %}

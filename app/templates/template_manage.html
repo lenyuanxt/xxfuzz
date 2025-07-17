@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>模板管理 - IoT Web Fuzz Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .template-list-card { margin-bottom: 2rem; }
+        .template-item { cursor: pointer; }
+        .modal-lg { max-width: 900px; }
+        .json-view { background: #f8f9fa; border-radius: 5px; padding: 10px; font-family: monospace; }
+    </style>
+</head>
+<body>
+<div class="container mt-5">
+    <h2 class="mb-4"><i class="fas fa-folder-open me-2"></i>模板管理</h2>
+    <div class="card template-list-card shadow">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-list me-2"></i>模板列表</h5>
+        </div>
+        <div class="card-body">
+            <ul class="list-group" id="template-list"></ul>
+        </div>
+    </div>
+</div>
+
+<!-- 模板详情/编辑弹窗 -->
+<div class="modal fade" id="templateModal" tabindex="-1" aria-labelledby="templateModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="templateModalLabel">模板详情</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="edit-template-form">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label class="form-label">Method</label>
+                <input type="text" class="form-control" id="modal-method" name="method">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Path</label>
+                <input type="text" class="form-control" id="modal-path" name="path">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">HTTP Version</label>
+                <input type="text" class="form-control" id="modal-http-version" name="http_version">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Query Params</label>
+                <div id="modal-query-params"></div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Headers</label>
+                <div id="modal-headers"></div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Cookies</label>
+                <div id="modal-cookies"></div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label class="form-label">Body</label>
+                <textarea class="form-control" id="modal-body" name="body" rows="5"></textarea>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Body Params</label>
+                <div id="modal-body-params"></div>
+              </div>
+            </div>
+          </div>
+        </form>
+        <div class="json-view mt-3" id="modal-json-view" style="display:none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-danger me-auto" id="delete-template-btn"><i class="fas fa-trash me-1"></i>删除模板</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+        <button type="button" class="btn btn-primary" id="save-template-btn"><i class="fas fa-save me-1"></i>保存修改</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+let currentFilename = '';
+
+function renderEditableKeyValue(data, container, prefix) {
+    const $container = $(container);
+    $container.empty();
+    if (!data || Object.keys(data).length === 0) {
+        $container.html('<p class="text-muted">无</p>');
+        return;
+    }
+    for (const [key, value] of Object.entries(data)) {
+        $container.append(`
+            <div class="input-group mb-1">
+                <span class="input-group-text">${key}</span>
+                <input type="text" class="form-control" name="${prefix}-${key}" value="${Array.isArray(value) ? value.join(',') : value}">
+            </div>
+        `);
+    }
+}
+function collectEditableKeyValue(container, prefix) {
+    const result = {};
+    $(container + ' input').each(function() {
+        const name = $(this).attr('name');
+        if (name && name.startsWith(prefix + '-')) {
+            const key = name.replace(prefix + '-', '');
+            result[key] = $(this).val();
+        }
+    });
+    return result;
+}
+
+function loadTemplateList() {
+    $.get('/packet/list_templates', function(res) {
+        if (res.success) {
+            const $list = $('#template-list');
+            $list.empty();
+            if (res.templates.length === 0) {
+                $list.append('<li class="list-group-item text-muted">暂无模板</li>');
+            } else {
+                res.templates.forEach(filename => {
+                    $list.append(`
+                        <li class="list-group-item d-flex justify-content-between align-items-center template-item" data-filename="${filename}">
+                            <span><i class="fas fa-file-code me-2 text-primary"></i>${filename}</span>
+                            <button class="btn btn-sm btn-outline-primary view-btn">查看/编辑</button>
+                        </li>
+                    `);
+                });
+            }
+        }
+    });
+}
+
+function loadTemplateDetail(filename) {
+    $.get(`/packet/get_template/${filename}`, function(res) {
+        if (res.success) {
+            currentFilename = filename;
+            const t = res.template;
+            $('#modal-method').val(t.method || '');
+            $('#modal-path').val(t.path || '');
+            $('#modal-http-version').val(t.http_version || '');
+            renderEditableKeyValue(t.query_params, '#modal-query-params', 'query_params');
+            renderEditableKeyValue(t.headers, '#modal-headers', 'headers');
+            renderEditableKeyValue(t.cookies, '#modal-cookies', 'cookies');
+            $('#modal-body').val(t.body || '');
+            renderEditableKeyValue(t.body_params, '#modal-body-params', 'body_params');
+            $('#modal-json-view').hide();
+            const modal = new bootstrap.Modal(document.getElementById('templateModal'));
+            modal.show();
+        }
+    });
+}
+
+function saveTemplate() {
+    const template = {
+        method: $('#modal-method').val(),
+        path: $('#modal-path').val(),
+        http_version: $('#modal-http-version').val(),
+        query_params: collectEditableKeyValue('#modal-query-params', 'query_params'),
+        headers: collectEditableKeyValue('#modal-headers', 'headers'),
+        cookies: collectEditableKeyValue('#modal-cookies', 'cookies'),
+        body: $('#modal-body').val(),
+        body_params: collectEditableKeyValue('#modal-body-params', 'body_params')
+    };
+    $.ajax({
+        url: `/packet/update_template/${currentFilename}`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({template: template}),
+        success: function(res) {
+            if (res.success) {
+                alert('保存成功！');
+                loadTemplateList();
+                bootstrap.Modal.getInstance(document.getElementById('templateModal')).hide();
+            } else {
+                alert('保存失败: ' + (res.error || '未知错误'));
+            }
+        }
+    });
+}
+
+function deleteTemplate() {
+    if (!confirm('确定要删除该模板吗？')) return;
+    $.post(`/packet/delete_template/${currentFilename}`, function(res) {
+        if (res.success) {
+            alert('删除成功！');
+            loadTemplateList();
+            bootstrap.Modal.getInstance(document.getElementById('templateModal')).hide();
+        } else {
+            alert('删除失败: ' + (res.error || '未知错误'));
+        }
+    });
+}
+
+$(function() {
+    loadTemplateList();
+    $('#template-list').on('click', '.view-btn', function() {
+        const filename = $(this).closest('.template-item').data('filename');
+        loadTemplateDetail(filename);
+    });
+    $('#save-template-btn').on('click', saveTemplate);
+    $('#delete-template-btn').on('click', deleteTemplate);
+});
+</script>
+</body>
+</html> 
