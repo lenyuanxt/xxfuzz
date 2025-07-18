@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-4">
+    <h2 class="mb-4 text-center"><i class="fas fa-bug me-2"></i>Fuzzer - 模板请求测试</h2>
+    <div class="card shadow-sm mb-4 border-0">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">选择模板</label>
+                    <select class="form-select" id="template-select"></select>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-primary w-100" id="load-template"><i class="fas fa-download me-1"></i>加载模板</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card shadow-sm mb-4 border-0">
+        <div class="card-header bg-light fw-bold">请求内容 <span class="text-muted fs-6">（可编辑，修改后再发送）</span></div>
+        <div class="card-body">
+            <form id="request-form">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-2">
+                        <label class="form-label">Method</label>
+                        <input type="text" class="form-control" id="req-method" name="method">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">URL</label>
+                        <input type="text" class="form-control" id="req-path" name="path">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Content-Type</label>
+                        <input type="text" class="form-control" id="req-content-type" name="content_type">
+                    </div>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Headers <span class="text-muted fs-6">(key:value, 一行一个)</span></label>
+                        <textarea class="form-control font-monospace" id="req-headers" rows="2"></textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Query Params <span class="text-muted fs-6">(key=value&...)</span></label>
+                        <input type="text" class="form-control font-monospace" id="req-query">
+                    </div>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Cookies <span class="text-muted fs-6">(key=value;...)</span></label>
+                        <input type="text" class="form-control font-monospace" id="req-cookies">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Body</label>
+                        <textarea class="form-control font-monospace" id="req-body" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="d-grid gap-2 mt-3">
+                    <button type="button" class="btn btn-success btn-lg" id="send-request"><i class="fas fa-paper-plane me-2"></i>发送请求</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-light fw-bold">响应内容</div>
+        <div class="card-body">
+            <pre id="response-content" class="bg-dark text-light rounded p-3" style="min-height:140px; font-size:1rem; font-family:Consolas,monospace;"></pre>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let currentTemplate = null;
+function loadTemplates() {
+    $.get('/packet/list_templates', function(res) {
+        if(res.success) {
+            const $sel = $('#template-select');
+            $sel.empty();
+            if(res.templates.length === 0) {
+                $sel.append('<option value="">暂无模板</option>');
+            } else {
+                $sel.append('<option value="">请选择模板</option>');
+                res.templates.forEach(f => {
+                    $sel.append(`<option value="${f}">${f}</option>`);
+                });
+            }
+        }
+    });
+}
+$('#load-template').on('click', function() {
+    const filename = $('#template-select').val();
+    if(!filename) { alert('请选择模板'); return; }
+    $.get('/packet/get_template/' + filename, function(res) {
+        if(res.success) {
+            currentTemplate = res.template;
+            $('#req-method').val(currentTemplate.method || 'GET');
+            $('#req-path').val(currentTemplate.path || '');
+            let ct = (currentTemplate.headers && currentTemplate.headers['Content-Type']) ? currentTemplate.headers['Content-Type'] : '';
+            $('#req-content-type').val(ct);
+            let headersStr = '';
+            if(currentTemplate.headers) {
+                for(const [k,v] of Object.entries(currentTemplate.headers)) {
+                    headersStr += k+':'+v+'\n';
+                }
+            }
+            $('#req-headers').val(headersStr.trim());
+            let queryStr = '';
+            if(currentTemplate.query_params) {
+                for(const [k,v] of Object.entries(currentTemplate.query_params)) {
+                    queryStr += k+'='+v+'\u0026';
+                }
+            }
+            $('#req-query').val(queryStr.replace(/\u0026$/,''));
+            let cookieStr = '';
+            if(currentTemplate.cookies) {
+                for(const [k,v] of Object.entries(currentTemplate.cookies)) {
+                    cookieStr += k+'='+v+';';
+                }
+            }
+            $('#req-cookies').val(cookieStr.replace(/;$/,''));
+            $('#req-body').val(currentTemplate.body || '');
+        }
+    });
+});
+$('#send-request').on('click', function() {
+    const data = {
+        method: $('#req-method').val(),
+        path: $('#req-path').val(),
+        content_type: $('#req-content-type').val(),
+        headers: $('#req-headers').val(),
+        query: $('#req-query').val(),
+        cookies: $('#req-cookies').val(),
+        body: $('#req-body').val()
+    };
+    $('#response-content').text('请求中...');
+    $.ajax({
+        url: '/fuzz/send',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({request: data}),
+        success: function(res) {
+            if(res.success) {
+                $('#response-content').text(res.response);
+            } else {
+                $('#response-content').text('请求失败：' + (res.error || '未知错误'));
+            }
+        },
+        error: function() {
+            $('#response-content').text('服务器错误');
+        }
+    });
+});
+$(function(){ loadTemplates(); });
+</script>
+{% endblock %} 

@@ -13,7 +13,9 @@ def create_app(config_class=Config):
     # 注册蓝图
     from app.routes.main_routes import bp as main_bp
     from app.routes.packet_routes import bp as packet_bp
+    from app.routes.fuzz_routes import bp as fuzz_bp
     app.register_blueprint(main_bp)
     app.register_blueprint(packet_bp)  # 添加数据包路由
+    app.register_blueprint(fuzz_bp)    # 添加fuzz路由
 
     return app

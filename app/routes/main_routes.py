@@ -1,5 +1,6 @@
 # app/routes/main_routes.py
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, request, jsonify
+import requests, os, json
 
 bp = Blueprint('main', __name__)
 
@@ -10,3 +11,7 @@ def index():
 @bp.route('/template/manage')
 def template_manage():
     return render_template('template_manage.html')
+
+@bp.route('/fuzz')
+def fuzz_view():
+    return render_template('fuzz.html')
