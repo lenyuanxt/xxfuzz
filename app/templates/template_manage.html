@@ -1,3 +1,5 @@
+{% extends "base.html" %}
+{% block content %}
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -84,12 +86,14 @@
     </div>
   </div>
 </div>
-
+{% endblock %}
+{% block scripts %}
 <script src="{{ url_for('static', filename='js/jquery-3.6.0.min.js') }}"></script>
 <script src="{{ url_for('static', filename='bootstrap/js/bootstrap.bundle.min.js') }}"></script>
 <script>
 let currentFilename = '';
 
+// 渲染可编辑键值对（key和value都可编辑，支持删除）
 function renderEditableKeyValue(data, container, prefix) {
     const $container = $(container);
     $container.empty();
@@ -97,26 +101,61 @@ function renderEditableKeyValue(data, container, prefix) {
         $container.html('<p class="text-muted">无</p>');
         return;
     }
-    for (const [key, value] of Object.entries(data)) {
+    function flat(obj, parentKey = '') {
+        let items = [];
+        for (const [k, v] of Object.entries(obj)) {
+            const newKey = parentKey ? parentKey + '.' + k : k;
+            if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+                items = items.concat(flat(v, newKey));
+            } else {
+                items.push([newKey, v]);
+            }
+        }
+        return items;
+    }
+    let items = Array.isArray(data) ? data : flat(data);
+    for (const [key, value] of items) {
+        const fieldId = 'field-' + Math.random().toString(36).substr(2, 9);
         $container.append(`
-            <div class="input-group mb-1">
-                <span class="input-group-text">${key}</span>
-                <input type="text" class="form-control" name="${prefix}-${key}" value="${Array.isArray(value) ? value.join(',') : value}">
+            <div class="input-group mb-1" id="${fieldId}">
+                <span class="input-group-text"><input type="text" class="form-control form-control-sm" value="${key}" name="${prefix}-key"></span>
+                <input type="text" class="form-control" name="${prefix}-value" value="${Array.isArray(value) ? value.join(',') : value}">
+                <button class="btn btn-outline-danger btn-sm remove-field-btn" type="button" data-field-id="${fieldId}"><i class="fas fa-trash"></i></button>
             </div>
         `);
     }
 }
+// 收集可编辑键值对（点分key还原为对象）
 function collectEditableKeyValue(container, prefix) {
     const result = {};
-    $(container + ' input').each(function() {
+    $(container + ' input[name^="' + prefix + '-"]').each(function() {
         const name = $(this).attr('name');
-        if (name && name.startsWith(prefix + '-')) {
+        if (name.endsWith('-key')) {
+            const key = $(this).val();
+            const value = $(this).closest('.input-group').find('input[name$="-value"]').val();
+            if (key) setDeep(result, key, value);
+        } else if (!name.endsWith('-value')) {
+            // 兼容原有解析字段
             const key = name.replace(prefix + '-', '');
-            result[key] = $(this).val();
+            setDeep(result, key, $(this).val());
         }
     });
     return result;
+    function setDeep(obj, path, value) {
+        const keys = path.split('.');
+        let cur = obj;
+        for (let i = 0; i < keys.length - 1; i++) {
+            if (!cur[keys[i]]) cur[keys[i]] = {};
+            cur = cur[keys[i]];
+        }
+        cur[keys[keys.length - 1]] = value;
+    }
 }
+// 动态删除字段
+$(document).on('click', '.remove-field-btn', function() {
+    const fieldId = $(this).data('field-id');
+    $('#' + fieldId).remove();
+});
 
 function loadTemplateList() {
     $.get('/packet/list_templates', function(res) {
@@ -210,5 +249,4 @@ $(function() {
     $('#delete-template-btn').on('click', deleteTemplate);
 });
 </script>
-</body>
-</html> 
+{% endblock %} 
