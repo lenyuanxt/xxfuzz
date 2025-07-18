@@ -32,16 +32,23 @@ def parse_packet():
 @bp.route('/save_template', methods=['POST'])
 def save_template():
     """保存模板接口"""
-    import os, json, time
+    import os, json, time, re
     data = request.get_json()
     template = data.get('template')
+    filename = data.get('filename')
     if not template:
         return jsonify({'success': False, 'error': 'No template data'}), 400
-    # 生成唯一文件名
-    ts = int(time.time())
-    filename = f'template_{ts}.json'
     save_dir = os.path.join(os.path.dirname(__file__), '../../uploads')
     os.makedirs(save_dir, exist_ok=True)
+    # 文件名安全校验
+    if filename:
+        filename = filename.strip()
+        # 只允许字母数字下划线中划线点，必须以.json结尾
+        if not re.match(r'^[\w\-.]+\.json$', filename):
+            return jsonify({'success': False, 'error': '文件名不合法，仅支持字母数字下划线中划线点且以.json结尾'}), 400
+    else:
+        ts = int(time.time())
+        filename = f'template_{ts}.json'
     save_path = os.path.join(save_dir, filename)
     try:
         with open(save_path, 'w', encoding='utf-8') as f:
@@ -55,7 +62,7 @@ def list_templates():
     """列出所有模板文件"""
     import os
     dir_path = os.path.join(os.path.dirname(__file__), '../../uploads')
-    files = [f for f in os.listdir(dir_path) if f.startswith('template_') and f.endswith('.json')]
+    files = [f for f in os.listdir(dir_path) if f.endswith('.json')]
     return jsonify({'success': True, 'templates': files})
 
 @bp.route('/get_template/<filename>', methods=['GET'])

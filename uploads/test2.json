@@ -1,0 +1,27 @@
+{
+  "method": "POST",
+  "path": "/api/users",
+  "http_version": "HTTP/1.1",
+  "query_params": {},
+  "headers": {
+    "Accept": "application/json",
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+    "Content-Type": "application/json",
+    "Host": "example.com",
+    "User-Agent": "MyApp/1.0.0"
+  },
+  "cookies": {},
+  "body": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john.doe@example.com\",\n  \"age\": 30,\n  \"is_active\": true,\n  \"roles\": [\"admin\", \"user\"],\n  \"address\": {\n    \"street\": \"123 Main St\",\n    \"city\": \"New York\",\n    \"zipcode\": \"10001\"\n  }\n}",
+  "body_params": {
+    "address": {
+      "city": "New York",
+      "street": "123 Main St",
+      "zipcode": "10001"
+    },
+    "age": "30",
+    "email": "john.doe@example.com",
+    "is_active": "true",
+    "name": "John Doe",
+    "roles": "admin,user"
+  }
+}

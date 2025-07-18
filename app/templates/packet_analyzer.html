@@ -37,29 +37,34 @@
 
     {% block content %}
     <div class="container mt-4">
-        <h1 class="mb-4">HTTP Packet Analyzer</h1>
-
-        <div class="card packet-section">
-            <div class="card-header bg-light">
-                <h5>Enter Raw HTTP Packet</h5>
-            </div>
-            <div class="card-body">
-                <form id="packet-form">
-                    <div class="mb-3">
-                        <label class="form-label">Paste from Burp/Yakit:</label>
-                        <textarea
-                            class="form-control font-monospace"
-                            id="raw-packet"
-                            rows="10"
-                            placeholder="GET /index.php?id=1 HTTP/1.1&#10;Host: example.com&#10;User-Agent: Mozilla/5.0&#10;Cookie: session=abc123;&#10;&#10;username=admin&amp;password=123456"></textarea>
-                    </div>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-cogs me-2"></i>Parse Packet
-                    </button>
-                </form>
-            </div>
+        <h1 class="mb-4">数据包模板编辑</h1>
+        <div class="mb-3">
+            <label for="protocol-select" class="form-label fw-bold">协议类型：</label>
+            <select class="form-select w-auto d-inline-block" id="protocol-select">
+                <option value="http" selected>HTTP</option>
+                <option value="other" disabled>其他协议（敬请期待）</option>
+            </select>
         </div>
-
+        <!-- 解析按钮 -->
+        <button class="btn btn-primary mb-3" id="open-parse-modal"><i class="fas fa-cogs me-2"></i>HTTP解析</button>
+        <!-- HTTP解析弹窗 -->
+        <div class="modal fade" id="parseModal" tabindex="-1" aria-labelledby="parseModalLabel" aria-hidden="true">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" id="parseModalLabel">HTTP请求解析</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                <textarea class="form-control font-monospace" id="raw-packet-modal" rows="10" placeholder="GET /index.php?id=1 HTTP/1.1\nHost: example.com\nUser-Agent: Mozilla/5.0\nCookie: session=abc123;\n\nusername=admin&password=123456"></textarea>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary" id="parse-btn-modal">解析</button>
+              </div>
+            </div>
+          </div>
+        </div>
         <div id="result-section">
             <div class="card packet-section packet-card shadow">
                 <div class="card-header bg-primary text-white">
@@ -81,17 +86,17 @@
                                 <label class="form-label fw-bold">HTTP Version</label>
                                 <input type="text" class="form-control" id="edit-http-version" name="http_version" placeholder="如：HTTP/1.1" value="">
                             </div>
-                            <h6 class="text-success mt-4"><i class="fas fa-question-circle me-1"></i>Query Parameters</h6>
+                            <h6 class="text-success mt-4"><i class="fas fa-question-circle me-1"></i>Query Parameters <button type="button" class="btn btn-sm btn-outline-success ms-2 add-field-btn" data-target="#edit-query-params" data-prefix="query_params">+添加字段</button></h6>
                             <div id="edit-query-params" class="mb-3"></div>
-                            <h6 class="text-warning mt-4"><i class="fas fa-heading me-1"></i>Headers</h6>
+                            <h6 class="text-warning mt-4"><i class="fas fa-heading me-1"></i>Headers <button type="button" class="btn btn-sm btn-outline-success ms-2 add-field-btn" data-target="#edit-headers" data-prefix="headers">+添加字段</button></h6>
                             <div id="edit-headers" class="mb-3"></div>
-                            <h6 class="text-danger mt-4"><i class="fas fa-cookie-bite me-1"></i>Cookies</h6>
+                            <h6 class="text-danger mt-4"><i class="fas fa-cookie-bite me-1"></i>Cookies <button type="button" class="btn btn-sm btn-outline-success ms-2 add-field-btn" data-target="#edit-cookies" data-prefix="cookies">+添加字段</button></h6>
                             <div id="edit-cookies" class="mb-3"></div>
                         </div>
                         <div class="col-md-6">
                             <h6 class="text-info"><i class="fas fa-align-left me-1"></i>Request Body</h6>
                             <textarea class="form-control mb-3" id="edit-body" name="body" rows="5" placeholder="请求体内容"></textarea>
-                            <h6 class="text-secondary mt-4"><i class="fas fa-list me-1"></i>Body Parameters</h6>
+                            <h6 class="text-secondary mt-4"><i class="fas fa-list me-1"></i>Body Parameters <button type="button" class="btn btn-sm btn-outline-success ms-2 add-field-btn" data-target="#edit-body-params" data-prefix="body_params">+添加字段</button></h6>
                             <div id="edit-body-params" class="mb-3"></div>
                         </div>
                     </div>
@@ -100,6 +105,24 @@
                     <button class="btn btn-warning btn-lg px-5" id="save-template">
                         <i class="fas fa-save me-2"></i>保存为模板
                     </button>
+                    <!-- 文件名输入弹窗 -->
+                    <div class="modal fade" id="filenameModal" tabindex="-1" aria-labelledby="filenameModalLabel" aria-hidden="true">
+                      <div class="modal-dialog">
+                        <div class="modal-content">
+                          <div class="modal-header">
+                            <h5 class="modal-title" id="filenameModalLabel">请输入模板文件名</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                          </div>
+                          <div class="modal-body">
+                            <input type="text" class="form-control" id="template-filename" placeholder="如：my_template.json">
+                          </div>
+                          <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                            <button type="button" class="btn btn-primary" id="confirm-save-template">保存</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -115,11 +138,24 @@
             renderEditableKeyValue({}, '#edit-cookies', 'cookies');
             renderEditableKeyValue({}, '#edit-body-params', 'body_params');
 
-            // 提交数据包进行解析
-            $('#packet-form').on('submit', function(e) {
-                e.preventDefault();
-                const rawPacket = $('#raw-packet').val();
+            // 协议切换（预留扩展）
+            $('#protocol-select').on('change', function() {
+                var proto = $(this).val();
+                if(proto === 'http') {
+                    $('#result-section').show();
+                } else {
+                    $('#result-section').hide();
+                    // 未来可在此处显示其他协议的编辑区域
+                }
+            });
 
+            // 打开解析弹窗
+            $('#open-parse-modal').on('click', function() {
+                $('#parseModal').modal('show');
+            });
+            // 弹窗内解析按钮
+            $('#parse-btn-modal').on('click', function() {
+                const rawPacket = $('#raw-packet-modal').val();
                 $.ajax({
                     url: '/packet/parse',
                     method: 'POST',
@@ -128,6 +164,7 @@
                         if (response.success) {
                             displayParsedData(response.parsed);
                             displayFuzzableFields(response.fuzzable);
+                            $('#parseModal').modal('hide');
                         } else {
                             alert('Error: ' + (response.error || 'Unknown error'));
                         }
@@ -171,19 +208,35 @@
                 }
             }
 
-            // 渲染可编辑键值对
+            // 渲染可编辑键值对（key和value都可编辑，支持删除）
             function renderEditableKeyValue(data, container, prefix) {
                 const $container = $(container);
                 $container.empty();
-                if (Object.keys(data).length === 0) {
+                if (!data || Object.keys(data).length === 0) {
                     $container.html('<p>None</p>');
                     return;
                 }
-                for (const [key, value] of Object.entries(data)) {
+                // 支持一层嵌套：user.name  user.age
+                function flat(obj, parentKey = '') {
+                    let items = [];
+                    for (const [k, v] of Object.entries(obj)) {
+                        const newKey = parentKey ? parentKey + '.' + k : k;
+                        if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+                            items = items.concat(flat(v, newKey));
+                        } else {
+                            items.push([newKey, v]);
+                        }
+                    }
+                    return items;
+                }
+                let items = Array.isArray(data) ? data : flat(data);
+                for (const [key, value] of items) {
+                    const fieldId = 'field-' + Math.random().toString(36).substr(2, 9);
                     $container.append(`
-                        <div class="input-group mb-1">
-                            <span class="input-group-text">${key}</span>
-                            <input type="text" class="form-control" name="${prefix}-${key}" value="${Array.isArray(value) ? value.join(',') : value}">
+                        <div class="input-group mb-1" id="${fieldId}">
+                            <span class="input-group-text"><input type="text" class="form-control form-control-sm" value="${key}" name="${prefix}-key"></span>
+                            <input type="text" class="form-control" name="${prefix}-value" value="${Array.isArray(value) ? value.join(',') : value}">
+                            <button class="btn btn-outline-danger btn-sm remove-field-btn" type="button" data-field-id="${fieldId}"><i class="fas fa-trash"></i></button>
                         </div>
                     `);
                 }
@@ -250,6 +303,16 @@
 
             // 保存为模板
             $('#save-template').on('click', function() {
+                $('#template-filename').val('');
+                $('#filenameModal').modal('show');
+            });
+            // 确认保存模板
+            $('#confirm-save-template').on('click', function() {
+                var filename = $('#template-filename').val().trim();
+                if (!filename) {
+                    alert('请输入文件名！');
+                    return;
+                }
                 // 收集表单数据
                 const template = {
                     method: $('#edit-method').val(),
@@ -265,10 +328,11 @@
                     url: '/packet/save_template',
                     method: 'POST',
                     contentType: 'application/json',
-                    data: JSON.stringify({template: template}),
+                    data: JSON.stringify({template: template, filename: filename}),
                     success: function(response) {
                         if (response.success) {
                             alert('模板保存成功！');
+                            $('#filenameModal').modal('hide');
                         } else {
                             alert('保存失败: ' + (response.error || '未知错误'));
                         }
@@ -278,17 +342,54 @@
                     }
                 });
             });
-            // 收集可编辑键值对
+            // 动态添加字段
+            $(document).on('click', '.add-field-btn', function() {
+                const target = $(this).data('target');
+                const prefix = $(this).data('prefix');
+                const $container = $(target);
+                const key = '';
+                const value = '';
+                const fieldId = 'field-' + Math.random().toString(36).substr(2, 9);
+                $container.append(`
+                    <div class="input-group mb-1" id="${fieldId}">
+                        <span class="input-group-text"><input type="text" class="form-control form-control-sm" placeholder="字段名" name="${prefix}-key"></span>
+                        <input type="text" class="form-control" placeholder="字段值" name="${prefix}-value">
+                        <button class="btn btn-outline-danger btn-sm remove-field-btn" type="button" data-field-id="${fieldId}"><i class="fas fa-trash"></i></button>
+                    </div>
+                `);
+            });
+            // 删除字段
+            $(document).on('click', '.remove-field-btn', function() {
+                const fieldId = $(this).data('field-id');
+                $('#' + fieldId).remove();
+            });
+            // 收集可编辑键值对（增强：点分key还原为对象）
             function collectEditableKeyValue(container, prefix) {
                 const result = {};
-                $(container + ' input').each(function() {
+                // 先收集自定义字段
+                $(container + ' input[name^="' + prefix + '-"]').each(function() {
                     const name = $(this).attr('name');
-                    if (name && name.startsWith(prefix + '-')) {
+                    if (name.endsWith('-key')) {
+                        const key = $(this).val();
+                        const value = $(this).closest('.input-group').find('input[name$="-value"]').val();
+                        if (key) setDeep(result, key, value);
+                    } else if (!name.endsWith('-value')) {
+                        // 兼容原有解析字段
                         const key = name.replace(prefix + '-', '');
-                        result[key] = $(this).val();
+                        setDeep(result, key, $(this).val());
                     }
                 });
                 return result;
+                // 支持点分key还原嵌套对象
+                function setDeep(obj, path, value) {
+                    const keys = path.split('.');
+                    let cur = obj;
+                    for (let i = 0; i < keys.length - 1; i++) {
+                        if (!cur[keys[i]]) cur[keys[i]] = {};
+                        cur = cur[keys[i]];
+                    }
+                    cur[keys[keys.length - 1]] = value;
+                }
             }
         });
     </script>
